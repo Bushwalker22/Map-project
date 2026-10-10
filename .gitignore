@@ -1,0 +1,6 @@
+# Files Git should NOT save (junk that Python and editors create on their own).
+__pycache__/
+*.pyc
+.vscode/
+Thumbs.db
+desktop.ini

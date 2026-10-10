@@ -1,0 +1,24 @@
+{
+  "_help": "List of terrains. 'id' is the internal name (no spaces), 'name' is shown in the editor, 'color' is used when the texture is missing or the map is zoomed far out, 'texture' is a PNG file in ASSETS/textures. The order here is the order in the palette.",
+
+  "terrains": [
+    { "id": "desert_xeric",          "name": "Desert & Xeric Shrubland",   "color": [212, 186, 126], "water": false, "texture": "desert_xeric.png" },
+    { "id": "tropical_grassland",    "name": "Tropical Grassland",         "color": [186, 172,  88], "water": false, "texture": "tropical_grassland.png" },
+    { "id": "tropical_moist_forest", "name": "Tropical Moist Forest",      "color": [ 38,  84,  36], "water": false, "texture": "tropical_moist_forest.png" },
+    { "id": "boreal_taiga",          "name": "Boreal Forest / Taiga",      "color": [ 96, 108,  90], "water": false, "texture": "boreal_taiga.png" },
+    { "id": "temperate_broadleaf",   "name": "Temperate Broadleaf Forest", "color": [ 78, 112,  54], "water": false, "texture": "temperate_broadleaf.png" },
+    { "id": "temperate_grassland",   "name": "Temperate Grassland",        "color": [128, 160,  78], "water": false, "texture": "temperate_grassland.png" },
+    { "id": "tundra",                "name": "Tundra",                     "color": [148, 150, 128], "water": false, "texture": "tundra.png" },
+    { "id": "montane_grassland",     "name": "Montane Grassland",          "color": [122, 136,  96], "water": false, "texture": "montane_grassland.png" },
+    { "id": "tropical_dry_forest",   "name": "Tropical Dry Forest",        "color": [164, 148,  90], "water": false, "texture": "tropical_dry_forest.png" },
+    { "id": "temperate_conifer",     "name": "Temperate Conifer Forest",   "color": [ 84, 110,  70], "water": false, "texture": "temperate_conifer.png" },
+    { "id": "mediterranean",         "name": "Mediterranean",              "color": [178, 164, 112], "water": false, "texture": "mediterranean.png" },
+    { "id": "flooded_grassland",     "name": "Flooded Grassland",          "color": [110, 146,  92], "water": false, "texture": "flooded_grassland.png" },
+    { "id": "tropical_conifer",      "name": "Tropical Conifer Forest",    "color": [ 96, 122,  62], "water": false, "texture": "tropical_conifer.png" },
+    { "id": "mangroves",             "name": "Mangroves",                  "color": [ 64, 112, 106], "water": false, "texture": "mangroves.png" },
+
+    { "id": "ocean",                 "name": "Ocean",                      "color": [ 26,  58, 108], "water": true,  "texture": "ocean.png" },
+    { "id": "sea",                   "name": "Sea",                        "color": [ 38,  92, 142], "water": true,  "texture": "sea.png" },
+    { "id": "lake",                  "name": "Lake",                       "color": [ 72, 134, 160], "water": true,  "texture": "lake.png" }
+  ]
+}
