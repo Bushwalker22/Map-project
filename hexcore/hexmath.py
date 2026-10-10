@@ -79,6 +79,17 @@ def line(a, b):
     return result
 
 
+def hexes_in_range(center, radius):
+    """All axial hexes within `radius` steps of center (center included).
+    Radius 0 is just the center, 1 adds its 6 neighbors, 2 makes 19 hexes..."""
+    cq, cr = center
+    result = []
+    for dq in range(-radius, radius + 1):
+        for dr in range(max(-radius, -dq - radius), min(radius, -dq + radius) + 1):
+            result.append((cq + dq, cr + dr))
+    return result
+
+
 # --- Converting between hexes and pixels ------------------------------------
 # "size" is the distance from a hex's center to any of its corners.
 

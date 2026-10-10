@@ -52,6 +52,14 @@ class TestHexMath(unittest.TestCase):
         self.assertEqual(hexmath.distance((0, 0), (3, 0)), 3)
         self.assertEqual(hexmath.distance((0, 0), (2, -4)), 4)
 
+    def test_brush_sizes(self):
+        # Radius 0, 1, 2, 3 cover 1, 7, 19, 37 hexes, all within reach.
+        for radius, count in [(0, 1), (1, 7), (2, 19), (3, 37)]:
+            hexes = hexmath.hexes_in_range((4, -2), radius)
+            self.assertEqual(len(set(hexes)), count)
+            for h in hexes:
+                self.assertLessEqual(hexmath.distance((4, -2), h), radius)
+
     def test_line_has_no_gaps(self):
         start, end = (0, 0), (7, -3)
         hexes = hexmath.line(start, end)
