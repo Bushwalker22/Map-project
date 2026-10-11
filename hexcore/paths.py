@@ -13,3 +13,4 @@ TEXTURES_DIR = os.path.join(ASSETS_DIR, "textures")     # terrain hex images
 MAPS_DIR = os.path.join(PROJECT_DIR, "MAPS")            # saved maps
 
 TERRAINS_FILE = os.path.join(DATA_DIR, "terrains.json")
+RIVERS_FILE = os.path.join(DATA_DIR, "rivers.json")

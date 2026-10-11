@@ -2,7 +2,7 @@
 
 A hex map editor written in Python with pygame. It's the first step of a larger plan: map editor, then random map generation, then a turn-based strategy engine, then a game.
 
-**Status:** early prototype. You can paint terrain on a hex map with different brush sizes, and save and load maps.
+**Status:** early prototype. You can paint terrain on a hex map with different brush sizes, draw rivers, and save and load maps.
 
 ## Setup
 
@@ -33,6 +33,15 @@ A hex map editor written in Python with pygame. It's the first step of a larger 
 | Zoom | Mouse wheel (zooms toward the mouse pointer) |
 | Show the whole map | Home |
 | Grid lines on/off | G |
+
+## Rivers
+
+Pick a river from the **RIVERS** section at the bottom of the palette (scroll down). All rivers run *along the borders* between hexes, as obstacles to cross:
+
+- **Stream / Creek**, **River** and **Major River**, each wider than the last. Click near a hex border, then drag: the river follows the borders corner to corner. Join a smaller river onto a bigger one to build a river system.
+- **Erase rivers**: removes the river on the border nearest the mouse.
+
+River types are listed in `data/rivers.json` (name, colour, width).
 
 ## Terrains
 

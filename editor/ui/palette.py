@@ -1,6 +1,13 @@
 """
-The terrain palette: the panel on the left where you pick what to paint.
+The palette: the panel on the left where you pick what to paint.
+
+The selected entry (palette.selected) is one of:
+- a Terrain           (paint terrain)
+- a RiverType         (draw rivers, see hexcore/rivers.py)
+- a Tool              (special actions: erase rivers)
 """
+
+from dataclasses import dataclass
 
 import pygame
 
@@ -19,10 +26,21 @@ TEXT_COLOR = (210, 212, 218)
 HOVER_BG = (42, 45, 52)
 SELECTED_BG = (56, 63, 80)
 SELECTED_MARK = (255, 220, 90)
+SWATCH_LAND = (120, 150, 90)      # background hex behind river previews
+ERASE_COLOR = (230, 90, 80)
+
+
+@dataclass
+class Tool:
+    id: str      # e.g. "erase_rivers"
+    name: str
+
+
+TOOLS = [Tool("erase_rivers", "Erase rivers")]
 
 
 class TerrainPalette:
-    def __init__(self, terrains, textures, font, title_font, header_font):
+    def __init__(self, terrains, river_types, textures, font, title_font, header_font):
         self.textures = textures
         self.font = font
         self.title_font = title_font
@@ -30,11 +48,14 @@ class TerrainPalette:
         self.selected = terrains[0]
         self.scroll = 0
 
-        # The list shown: section headers and terrains, in order.
+        # The list shown: section headers and entries, in order.
         self.rows = [("header", "LAND")]
-        self.rows += [("terrain", t) for t in terrains if not t.water]
+        self.rows += [("entry", t) for t in terrains if not t.water]
         self.rows += [("header", "WATER")]
-        self.rows += [("terrain", t) for t in terrains if t.water]
+        self.rows += [("entry", t) for t in terrains if t.water]
+        self.rows += [("header", "RIVERS")]
+        self.rows += [("entry", r) for r in river_types]
+        self.rows += [("entry", tool) for tool in TOOLS]
 
     def row_at(self, y):
         """Index of the row at panel height y, or None."""
@@ -47,7 +68,7 @@ class TerrainPalette:
 
     def handle_click(self, x, y):
         index = self.row_at(y)
-        if index is not None and self.rows[index][0] == "terrain":
+        if index is not None and self.rows[index][0] == "entry":
             self.selected = self.rows[index][1]
 
     def handle_wheel(self, wheel_y, panel_height):
@@ -60,7 +81,7 @@ class TerrainPalette:
         panel = pygame.Rect(0, 0, PANEL_WIDTH, panel_height)
         pygame.draw.rect(surface, PANEL_BG, panel)
         pygame.draw.line(surface, PANEL_EDGE, (PANEL_WIDTH - 1, 0), (PANEL_WIDTH - 1, panel_height))
-        title = self.title_font.render("Terrain", True, TITLE_COLOR)
+        title = self.title_font.render("Palette", True, TITLE_COLOR)
         surface.blit(title, (16, (TITLE_HEIGHT - title.get_height()) // 2))
 
         hovered = self.row_at(mouse_pos[1]) if panel.collidepoint(mouse_pos) else None
@@ -74,25 +95,41 @@ class TerrainPalette:
                 text = self.header_font.render(value, True, HEADER_COLOR)
                 surface.blit(text, (16, row.bottom - text.get_height() - 6))
             else:
-                self.draw_terrain_row(surface, row, value, index == hovered)
+                self.draw_entry_row(surface, row, value, index == hovered)
         surface.set_clip(None)
 
-    def draw_terrain_row(self, surface, row, terrain, is_hovered):
-        if terrain is self.selected:
+    def draw_entry_row(self, surface, row, entry, is_hovered):
+        if entry is self.selected:
             pygame.draw.rect(surface, SELECTED_BG, row)
             pygame.draw.rect(surface, SELECTED_MARK, (row.x, row.y, 4, row.height))
         elif is_hovered:
             pygame.draw.rect(surface, HOVER_BG, row)
 
-        # Little hex preview of the terrain.
-        cx, cy = row.x + 34, row.centery
-        corners = hexmath.corner_offsets(SWATCH_SIZE)
-        pygame.draw.polygon(surface, terrain.color, [(cx + x, cy + y) for x, y in corners])
-        width = round(hexmath.hex_width(SWATCH_SIZE))
-        height = round(hexmath.hex_height(SWATCH_SIZE))
-        image = self.textures.get(terrain.id, width, height)
-        if image:
-            surface.blit(image, (round(cx - width / 2), round(cy - height / 2)))
-
-        name = self.font.render(terrain.name, True, TEXT_COLOR)
+        self.draw_swatch(surface, row.x + 34, row.centery, entry)
+        name = self.font.render(entry.name, True, TEXT_COLOR)
         surface.blit(name, (row.x + 60, row.centery - name.get_height() // 2))
+
+    def draw_swatch(self, surface, cx, cy, entry):
+        """Little hex preview of a palette entry."""
+        corners = [(cx + x, cy + y) for x, y in hexmath.corner_offsets(SWATCH_SIZE)]
+        kind = getattr(entry, "kind", None)
+
+        if isinstance(entry, Tool) or kind is not None:
+            pygame.draw.polygon(surface, SWATCH_LAND, corners)
+        else:
+            pygame.draw.polygon(surface, entry.color, corners)
+            width = round(hexmath.hex_width(SWATCH_SIZE))
+            height = round(hexmath.hex_height(SWATCH_SIZE))
+            image = self.textures.get(entry.id, width, height)
+            if image:
+                surface.blit(image, (round(cx - width / 2), round(cy - height / 2)))
+            return
+
+        if kind == "edge":
+            # A river along two sides of the hex.
+            line_width = max(2, round(entry.width / 2.5))
+            pygame.draw.line(surface, entry.color, corners[0], corners[1], line_width)
+            pygame.draw.line(surface, entry.color, corners[5], corners[0], line_width)
+        elif entry.id == "erase_rivers":
+            pygame.draw.line(surface, ERASE_COLOR, (cx - 7, cy - 7), (cx + 7, cy + 7), 3)
+            pygame.draw.line(surface, ERASE_COLOR, (cx - 7, cy + 7), (cx + 7, cy - 7), 3)

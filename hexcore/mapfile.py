@@ -5,7 +5,7 @@ A map file is plain JSON text (it opens in Notepad). It looks like this:
 
     {
       "format": "hexmap",
-      "version": 1,
+      "version": 2,
       "meta": {"name": "My Map"},
       "cols": 40,
       "rows": 30,
@@ -14,11 +14,15 @@ A map file is plain JSON text (it opens in Notepad). It looks like this:
         ["ocean", "tundra", "tundra", ...],   <- row 1
         ...
       ],
-      "cells": []
+      "cells": [],
+      "edges": []
     }
 
 "cells" only lists hexes that have extra data (elevation, feature, props),
 so files stay small until those are used.
+"edges" lists the rivers, which run along hex borders.
+
+Version history: 1 = terrain only, 2 = adds rivers. Older files still load.
 """
 
 import json
@@ -27,7 +31,7 @@ import os
 from hexcore.mapdata import HexMap
 
 FORMAT_NAME = "hexmap"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 
 class MapFileError(Exception):
@@ -58,6 +62,12 @@ def save_map(hex_map, path):
                            "feature": cell.feature, "props": cell.props})
     lines.append('  "cells": [')
     lines.append(",\n".join("    " + json.dumps(e) for e in extras))
+    lines.append("  ],")
+
+    edges = [{"col": col, "row": row, "side": side, "type": river_type}
+             for (col, row, side), river_type in sorted(hex_map.edges.items())]
+    lines.append('  "edges": [')
+    lines.append(",\n".join("    " + json.dumps(e) for e in edges))
     lines.append("  ]")
     lines.append("}")
 
@@ -98,6 +108,9 @@ def load_map(path):
                 cell.elevation = extra.get("elevation", 0)
                 cell.feature = extra.get("feature")
                 cell.props = extra.get("props", {})
+        for edge in data.get("edges", []):
+            hex_map.set_edge_river(int(edge["col"]), int(edge["row"]), int(edge["side"]) % 6,
+                                   str(edge["type"]))
     except (KeyError, TypeError, ValueError) as e:
         raise MapFileError(f"The map file is missing something or has a wrong value.\n({e})")
     return hex_map

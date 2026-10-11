@@ -8,11 +8,12 @@ import os
 
 import pygame
 
-from hexcore import hexmath, paths
+from hexcore import hexmath, paths, rivers
 from hexcore.mapdata import HexMap
 from hexcore.mapfile import MapFileError, load_map, save_map
-from hexcore.terrain import load_terrains
-from editor import dialogs
+from hexcore.rivers import RiverType, load_river_types
+from hexcore.terrain import Terrain, load_terrains
+from editor import dialogs, rivers_draw
 from editor.camera import Camera
 from editor.textures import TextureLibrary
 from editor.ui.palette import PANEL_WIDTH, TerrainPalette
@@ -52,8 +53,10 @@ class EditorApp:
 
         self.terrains = load_terrains()
         self.terrain_by_id = {t.id: t for t in self.terrains}
+        self.river_types = load_river_types()
+        self.river_by_id = {r.id: r for r in self.river_types}
         self.textures = TextureLibrary(self.terrains)
-        self.palette = TerrainPalette(self.terrains, self.textures,
+        self.palette = TerrainPalette(self.terrains, self.river_types, self.textures,
                                       self.font, self.title_font, self.header_font)
         self.toolbar = Toolbar(self.font)
 
@@ -62,6 +65,7 @@ class EditorApp:
         self.dragging = False      # moving the view with the right/middle button
         self.painting = False      # left button held down on the map
         self.last_painted = None   # last hex painted in this stroke
+        self.last_corner = None    # last hex corner reached while drawing an edge river
         self.hovered = None        # (col, row) of the hex under the mouse, or None
         self.show_grid = True
         self.brush_size = 1
@@ -114,6 +118,33 @@ class EditorApp:
             return (col, row)
         return None
 
+    def edge_at_screen(self, sx, sy):
+        """(col, row, side) of the hex edge closest to a window point, or None."""
+        target = self.hex_at_screen(sx, sy)
+        if target is None:
+            return None
+        view = self.view_rect()
+        wx, wy = self.camera.screen_to_world(sx - view.x, sy - view.y)
+        cx, cy = self.hex_center(*target)
+
+        def distance_to_side(side):
+            mx, my = rivers.side_midpoint(HEX_SIZE, side)
+            return (cx + mx - wx) ** 2 + (cy + my - wy) ** 2
+
+        side = min(range(6), key=distance_to_side)
+        if not self.map.edge_in_bounds(rivers.edge_key(*target, side)):
+            return None    # the outer border of the map has no neighbor
+        return (*target, side)
+
+    def tool_kind(self):
+        """What the selected palette entry does: "terrain", "river" or "erase_rivers"."""
+        tool = self.palette.selected
+        if isinstance(tool, Terrain):
+            return "terrain"
+        if isinstance(tool, RiverType):
+            return "river"
+        return tool.id
+
     def brush_hexes(self, col, row):
         """Every (col, row) the brush covers when centered on this hex."""
         center = hexmath.offset_to_axial(col, row)
@@ -154,6 +185,7 @@ class EditorApp:
                 elif self.view_rect().collidepoint(event.pos):
                     self.painting = True
                     self.last_painted = None
+                    self.last_corner = None
                     self.paint_at(event.pos)
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 self.painting = False
@@ -232,23 +264,66 @@ class EditorApp:
     # --- Painting --------------------------------------------------------------
 
     def paint_at(self, pos):
+        """Called on mouse press and while dragging with the left button."""
         target = self.hex_at_screen(*pos)
         if target is None:
             self.last_painted = None
             return
-        if self.last_painted is None:
-            centers = [target]
-        else:
-            # Fill in every hex between the last one and this one, so fast
-            # mouse movements don't leave gaps.
-            start = hexmath.offset_to_axial(*self.last_painted)
-            end = hexmath.offset_to_axial(*target)
-            centers = [hexmath.axial_to_offset(q, r) for q, r in hexmath.line(start, end)]
-        for center in centers:
-            for col, row in self.brush_hexes(*center):
-                if self.map.set_terrain(col, row, self.palette.selected.id):
-                    self.mark_changed()
+        kind = self.tool_kind()
+        stroke_start = self.last_painted is None
+        changed = False
+
+        if kind == "terrain":
+            for center in self.stroke_hexes(target):
+                for col, row in self.brush_hexes(*center):
+                    changed |= self.map.set_terrain(col, row, self.palette.selected.id)
+
+        elif kind == "river":
+            changed = self.paint_edge_river(pos, stroke_start)
+
+        elif kind == "erase_rivers":
+            edge = self.edge_at_screen(*pos)
+            if edge:
+                changed = self.map.clear_edge_river(*edge)
+
+        if changed:
+            self.mark_changed()
         self.last_painted = target
+
+    def paint_edge_river(self, pos, stroke_start):
+        """Edge rivers go corner to corner. A click paints the nearest edge;
+        dragging then follows the hex borders to whichever corner the mouse
+        comes close to, painting every edge on the way."""
+        river_id = self.palette.selected.id
+        view = self.view_rect()
+        wx, wy = self.camera.screen_to_world(pos[0] - view.x, pos[1] - view.y)
+        changed = False
+
+        if stroke_start or self.last_corner is None:
+            edge = self.edge_at_screen(*pos)
+            if edge:
+                changed = self.map.set_edge_river(*edge, river_id)
+                col, row, side = edge
+                ends = [rivers.corner_point(col, row, i, HEX_SIZE) for i in rivers.side_corners(side)]
+                self.last_corner = min(ends, key=lambda p: (p[0] - wx) ** 2 + (p[1] - wy) ** 2)
+            return changed
+
+        corner, distance = rivers.nearest_corner(wx, wy, HEX_SIZE)
+        if distance < HEX_SIZE * 0.4 and corner != self.last_corner:
+            path, reached = rivers.edge_path(self.last_corner, corner, HEX_SIZE)
+            for key in path:
+                changed |= self.map.set_edge_river(*key, river_id)
+            self.last_corner = reached
+        return changed
+
+    def stroke_hexes(self, target):
+        """The hexes from the last painted one up to target (both included),
+        so fast mouse movements don't leave gaps."""
+        if self.last_painted is None:
+            return [target]
+        start = hexmath.offset_to_axial(*self.last_painted)
+        end = hexmath.offset_to_axial(*target)
+        return [hexmath.axial_to_offset(q, r) for q, r in hexmath.line(start, end)]
 
     # --- New, open and save ----------------------------------------------------
 
@@ -384,13 +459,43 @@ class EditorApp:
                 if draw_grid:
                     pygame.draw.aalines(view, GRID_COLOR, True, points)
 
-        if self.hovered:
-            # Outline every hex the brush would paint.
-            thickness = 3 if self.brush_size == 1 else 2
-            for col, row in self.brush_hexes(*self.hovered):
+        # Rivers go on top of all terrain (a channel may reach into the next hex).
+        self.draw_rivers(view, size_on_screen, col_first, col_last, row_first, row_last)
+        self.draw_hover(view, size_on_screen, corners)
+
+    def draw_rivers(self, view, size_on_screen, col_first, col_last, row_first, row_last):
+        zoom = self.camera.zoom
+
+        def visible(col, row):
+            return col_first <= col <= col_last and row_first <= row <= row_last
+
+        for (col, row, side), type_id in self.map.edges.items():
+            river_type = self.river_by_id.get(type_id)
+            other = rivers.neighbor_offset(col, row, side)
+            if river_type and (visible(col, row) or visible(*other)):
+                center = self.camera.world_to_screen(*self.hex_center(col, row))
+                rivers_draw.draw_edge_river(view, center, size_on_screen, side, river_type, zoom)
+
+    def draw_hover(self, view, size_on_screen, corners):
+        """Yellow outline showing what a click would change."""
+        if not self.hovered:
+            return
+        if self.tool_kind() != "terrain":
+            # River tools work on borders: highlight the nearest one.
+            edge = self.edge_at_screen(*pygame.mouse.get_pos())
+            if edge:
+                col, row, side = edge
+                a, b = rivers.side_corners(side)
                 cx, cy = self.camera.world_to_screen(*self.hex_center(col, row))
-                points = [(cx + ox, cy + oy) for ox, oy in corners]
-                pygame.draw.lines(view, HOVER_OUTLINE, True, points, thickness)
+                pygame.draw.line(view, HOVER_OUTLINE, (cx + corners[a][0], cy + corners[a][1]),
+                                 (cx + corners[b][0], cy + corners[b][1]), 5)
+            return
+        hexes = self.brush_hexes(*self.hovered)
+        thickness = 3 if len(hexes) == 1 else 2
+        for col, row in hexes:
+            cx, cy = self.camera.world_to_screen(*self.hex_center(col, row))
+            points = [(cx + ox, cy + oy) for ox, oy in corners]
+            pygame.draw.lines(view, HOVER_OUTLINE, True, points, thickness)
 
     def draw_status_bar(self):
         width, height = self.screen.get_size()
@@ -402,9 +507,15 @@ class EditorApp:
             terrain_id = self.map.get(col, row).terrain
             terrain = self.terrain_by_id.get(terrain_id)
             info = f"Hex {col}, {row}: {terrain.name if terrain else terrain_id}"
+            edge = self.edge_at_screen(*pygame.mouse.get_pos())
+            type_id = edge and self.map.get_edge_river(*edge)
+            if type_id:
+                river_type = self.river_by_id.get(type_id)
+                info += f"  (nearest border: {river_type.name if river_type else type_id})"
         else:
             info = "Hex: -"
-        info += (f"     Painting: {self.palette.selected.name} (size {self.brush_size})"
+        size_note = f" (size {self.brush_size})" if self.tool_kind() == "terrain" else ""
+        info += (f"     Tool: {self.palette.selected.name}{size_note}"
                  f"     Zoom: {self.camera.zoom * 100:.0f}%"
                  f"     Map: {self.map.cols} x {self.map.rows}"
                  f"     FPS: {self.clock.get_fps():.0f}")

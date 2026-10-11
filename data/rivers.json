@@ -1,0 +1,8 @@
+{
+  "_help": "River types. All rivers run along the borders between hexes. 'color' is (red, green, blue). 'width' is in map pixels at 100% zoom (a hex is 64 pixels wide). 'kind' is always 'edge' for now.",
+  "rivers": [
+    {"id": "stream",      "name": "Stream / Creek", "kind": "edge", "color": [96, 160, 220], "width": 3},
+    {"id": "river",       "name": "River",          "kind": "edge", "color": [60, 125, 205], "width": 7},
+    {"id": "major_river", "name": "Major River",    "kind": "edge", "color": [45, 105, 190], "width": 11}
+  ]
+}

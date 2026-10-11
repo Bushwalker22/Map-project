@@ -34,6 +34,25 @@ class TestMapFile(unittest.TestCase):
         for key, cell in original.cells.items():
             self.assertEqual(loaded.cells[key], cell, key)
 
+    def test_rivers_survive_save_and_load(self):
+        original = HexMap(6, 6, "temperate_grassland")
+        original.set_edge_river(1, 1, 0, "stream")
+        original.set_edge_river(2, 2, 4, "river")
+        original.set_edge_river(3, 3, 1, "major_river")
+        save_map(original, self.path)
+
+        loaded = load_map(self.path)
+        self.assertEqual(len(loaded.edges), 3)
+        self.assertEqual(loaded.edges, original.edges)
+
+    def test_old_version_1_file_still_loads(self):
+        with open(self.path, "w", encoding="utf-8") as f:
+            f.write('{"format": "hexmap", "version": 1, "meta": {"name": "Old"}, "cols": 2, "rows": 1,'
+                    ' "terrain": [["ocean", "tundra"]], "cells": []}')
+        loaded = load_map(self.path)
+        self.assertEqual(loaded.get(1, 0).terrain, "tundra")
+        self.assertEqual(loaded.edges, {})
+
     def test_saved_file_is_plain_json(self):
         save_map(HexMap(3, 2, "lake"), self.path)
         with open(self.path, encoding="utf-8") as f:
